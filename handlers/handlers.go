@@ -37,3 +37,40 @@ func (j *Job) CreateJob(ctx *gin.Context) {
 		"status": newJob.Status,
 	})
 }
+func (j *Job) CheckJobStatus(ctx *gin.Context) {
+	jobID := ctx.Param("job_id")
+
+	// Check if job exists
+	jobValue, exists := j.manager.Jobs.Load(jobID)
+	if !exists {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"error": "Job not found",
+		})
+		return
+	}
+
+	job := jobValue.(*repository.Job)
+
+	// If job is already completed, return immediately
+	if job.Status == repository.StatusCompleted {
+		ctx.JSON(http.StatusOK, job)
+		return
+	}
+
+	// Subscribe to updates
+	updates := j.manager.Subscribe(jobID)
+	defer j.manager.Unsubscribe(jobID, updates)
+
+	select {
+	case updatedJob := <-updates:
+		ctx.JSON(http.StatusOK, updatedJob)
+	case <-ctx.Done():
+		// Client disconnected
+		return
+	case <-time.After(15 * time.Second):
+		ctx.JSON(http.StatusRequestTimeout, gin.H{
+			"job_id": jobID,
+			"status": "timeout",
+		})
+	}
+}

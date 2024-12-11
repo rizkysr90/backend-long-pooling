@@ -17,9 +17,9 @@ func main() {
 	r.POST("/insert", func(ctx *gin.Context) {
 		jobHandlers.CreateJob(ctx)
 	})
-	// r.GET("/checkjobstatus/:job_id", func(ctx *gin.Context) {
-	// 	handlers.CheckJobStatus(ctx)
-	// })
+	r.GET("/checkjobstatus/:job_id", func(ctx *gin.Context) {
+		jobHandlers.CheckJobStatus(ctx)
+	})
 
 	r.Run() // listen and serve on 0.0.0.0:8080
 }

@@ -38,7 +38,7 @@ func NewJobManager() *JobManager {
 
 func (jm *JobManager) ProcessJob(jobID string) {
 	progress := 0
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for progress < 100 {
 		getTick := <-ticker.C
@@ -49,6 +49,7 @@ func (jm *JobManager) ProcessJob(jobID string) {
 		}
 	}
 }
+
 func (jm *JobManager) updateJobProgress(jobID string, progress int) {
 	if jobValue, exists := jm.Jobs.Load(jobID); exists {
 		job := jobValue.(*Job)
@@ -77,6 +78,34 @@ func (jm *JobManager) notifyListeners(jobID string, job *Job) {
 			default:
 				// Channel is blocked, skip this listener
 			}
+		}
+	}
+}
+
+func (jm *JobManager) Subscribe(jobID string) chan *Job {
+	jm.Mu.Lock() // Write lock since we're modifying the listeners map
+	defer jm.Mu.Unlock()
+
+	ch := make(chan *Job, 1)
+	jm.Listeners[jobID] = append(jm.Listeners[jobID], ch)
+	return ch
+}
+func (jm *JobManager) Unsubscribe(jobID string, ch chan *Job) {
+	jm.Mu.Lock() // Write lock since we're modifying the listeners map
+	defer jm.Mu.Unlock()
+
+	if listeners, exists := jm.Listeners[jobID]; exists {
+		for i, listener := range listeners {
+			if listener == ch {
+				// Remove this channel from Listeners
+				jm.Listeners[jobID] = append(jm.Listeners[jobID][:i], jm.Listeners[jobID][i+1:]...)
+				close(ch)
+				break
+			}
+		}
+		// If no more Listeners, clean up the map entry
+		if len(jm.Listeners[jobID]) == 0 {
+			delete(jm.Listeners, jobID)
 		}
 	}
 }
